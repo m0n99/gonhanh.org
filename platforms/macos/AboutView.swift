@@ -72,11 +72,11 @@ struct AboutView: View {
             VStack(spacing: 4) {
                 Text(AppMetadata.copyright)
                     .font(.caption2)
-                    .foregroundColor(.tertiaryLabel)
+                    .foregroundColor(.secondary.opacity(0.6))
 
                 Text("License: \(AppMetadata.license)")
                     .font(.caption2)
-                    .foregroundColor(.tertiaryLabel)
+                    .foregroundColor(.secondary.opacity(0.6))
             }
             .padding(.bottom, 16)
         }
