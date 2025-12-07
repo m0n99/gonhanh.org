@@ -101,17 +101,11 @@ class MenuBarController {
     private func setupMenu() {
         let menu = NSMenu()
 
-        // Header
+        // Header with toggle
         let header = NSMenuItem()
         header.view = createHeaderView()
+        header.tag = 1
         menu.addItem(header)
-        menu.addItem(.separator())
-
-        // Toggle
-        let toggle = NSMenuItem(title: "Tắt gõ tiếng Việt", action: #selector(toggleEnabled), keyEquivalent: " ")
-        toggle.target = self
-        toggle.tag = 1
-        menu.addItem(toggle)
         menu.addItem(.separator())
 
         // Methods
@@ -147,39 +141,35 @@ class MenuBarController {
     }
 
     private func createHeaderView() -> NSView {
-        let view = NSView(frame: NSRect(x: 0, y: 0, width: 200, height: 44))
+        let view = NSView(frame: NSRect(x: 0, y: 0, width: 220, height: 50))
 
+        // App name
         let name = NSTextField(labelWithString: AppMetadata.name)
         name.font = .systemFont(ofSize: 13, weight: .bold)
-        name.frame = NSRect(x: 14, y: 24, width: 100, height: 16)
+        name.frame = NSRect(x: 14, y: 28, width: 120, height: 16)
         view.addSubview(name)
 
-        let dot = NSView(frame: NSRect(x: 14, y: 8, width: 8, height: 8))
-        dot.wantsLayer = true
-        dot.layer?.cornerRadius = 4
-        dot.layer?.backgroundColor = (isEnabled ? NSColor.systemGreen : .systemGray).cgColor
-        view.addSubview(dot)
-
-        let status = NSTextField(labelWithString: isEnabled ? "Đang bật • \(currentMethod.name)" : "Đang tắt")
-        status.font = .systemFont(ofSize: 11)
-        status.textColor = .secondaryLabelColor
-        status.frame = NSRect(x: 26, y: 4, width: 100, height: 16)
-        view.addSubview(status)
-
+        // Version
         let version = NSTextField(labelWithString: "v\(AppMetadata.version)")
         version.font = .systemFont(ofSize: 10)
         version.textColor = .tertiaryLabelColor
-        version.alignment = .right
-        version.frame = NSRect(x: 140, y: 24, width: 46, height: 14)
+        version.frame = NSRect(x: 14, y: 12, width: 50, height: 14)
         view.addSubview(version)
+
+        // Toggle switch
+        let toggle = NSSwitch()
+        toggle.state = isEnabled ? .on : .off
+        toggle.target = self
+        toggle.action = #selector(toggleEnabled)
+        toggle.frame = NSRect(x: 170, y: 16, width: 38, height: 20)
+        view.addSubview(toggle)
 
         return view
     }
 
     private func updateMenu() {
         guard let menu = statusItem.menu else { return }
-        menu.items.first?.view = createHeaderView()
-        menu.item(withTag: 1)?.title = isEnabled ? "Tắt gõ tiếng Việt" : "Bật gõ tiếng Việt"
+        menu.item(withTag: 1)?.view = createHeaderView()
         menu.item(withTag: 10)?.state = currentMethod == .telex ? .on : .off
         menu.item(withTag: 11)?.state = currentMethod == .vni ? .on : .off
     }
