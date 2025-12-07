@@ -58,11 +58,21 @@ class MenuBarController {
         // Load enabled (default: true)
         if defaults.object(forKey: SettingsKey.enabled) != nil {
             isEnabled = defaults.bool(forKey: SettingsKey.enabled)
+        } else {
+            // Set default
+            isEnabled = true
+            defaults.set(true, forKey: SettingsKey.enabled)
         }
 
         // Load method (default: 0=Telex)
-        let methodValue = defaults.integer(forKey: SettingsKey.method)
-        currentMethod = InputMode(rawValue: methodValue) ?? .telex
+        if defaults.object(forKey: SettingsKey.method) != nil {
+            let methodValue = defaults.integer(forKey: SettingsKey.method)
+            currentMethod = InputMode(rawValue: methodValue) ?? .telex
+        } else {
+            // Set default to Telex
+            currentMethod = .telex
+            defaults.set(InputMode.telex.rawValue, forKey: SettingsKey.method)
+        }
     }
 
     private func checkFirstLaunchOrPermission() {

@@ -380,12 +380,12 @@ struct SetupStep: View {
     @State private var selectedMode: InputMode = .telex
 
     var body: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: 20) {
             Spacer()
 
-            // Icon
-            Image(systemName: "textformat.alt")
-                .font(.system(size: 50))
+            // Icon - Vietnamese "Aa" text
+            Text("Aa")
+                .font(.system(size: 60, weight: .light, design: .rounded))
                 .foregroundColor(.accentColor)
 
             // Title
@@ -407,12 +407,13 @@ struct SetupStep: View {
                 }
             }
             .frame(maxWidth: 350)
+            .padding(.top, 10)
 
             Spacer()
 
             // Next button
             Button(action: {
-                // Save selected mode
+                // Save selected mode (default is Telex)
                 UserDefaults.standard.set(selectedMode.rawValue, forKey: SettingsKey.method)
                 RustBridge.setMethod(selectedMode.rawValue)
                 onNext()
