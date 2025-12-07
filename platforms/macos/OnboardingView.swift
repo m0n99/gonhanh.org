@@ -6,22 +6,16 @@ struct OnboardingView: View {
     @State private var currentStep = 0
     @State private var hasPermission = false
     @State private var selectedMode: InputMode = .telex
+    @State private var isPostRestart = false
 
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
-    // Đã restart sau khi cấp quyền?
-    private var isPostRestart: Bool {
-        UserDefaults.standard.bool(forKey: SettingsKey.permissionGranted) && AXIsProcessTrusted()
-    }
-
-    // Tổng số steps theo flow
-    private var totalSteps: Int {
-        isPostRestart ? 2 : 2
-    }
+    // Tổng số steps: luôn là 2 cho cả hai flow
+    private let totalSteps = 2
 
     // Step index cho dots (0-based)
     private var currentStepIndex: Int {
-        if isPostRestart {
+        if currentStep >= 10 {
             // Post-restart: step 10 -> index 0, step 11 -> index 1
             return currentStep - 10
         } else {
@@ -39,8 +33,10 @@ struct OnboardingView: View {
         .frame(width: 480)
         .onAppear {
             hasPermission = AXIsProcessTrusted()
-            // Nếu đã restart và có quyền -> bắt đầu từ Setup (chọn bảng mã)
-            if UserDefaults.standard.bool(forKey: SettingsKey.permissionGranted) && hasPermission {
+            // Nếu đã restart và có quyền -> bắt đầu từ Success (chọn bảng mã)
+            let permissionGranted = UserDefaults.standard.bool(forKey: SettingsKey.permissionGranted)
+            if permissionGranted && hasPermission {
+                isPostRestart = true
                 currentStep = 10  // Success step đầu tiên
             }
         }
@@ -134,6 +130,8 @@ struct OnboardingView: View {
     private func restartApp() {
         UserDefaults.standard.set(selectedMode.rawValue, forKey: SettingsKey.method)
         UserDefaults.standard.set(true, forKey: SettingsKey.permissionGranted)
+        // Reset hasCompletedOnboarding để sau restart vẫn show onboarding (chọn bảng mã)
+        UserDefaults.standard.set(false, forKey: SettingsKey.hasCompletedOnboarding)
         let path = Bundle.main.bundlePath
         let task = Process()
         task.launchPath = "/bin/sh"
