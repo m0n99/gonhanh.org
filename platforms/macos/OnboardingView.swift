@@ -190,7 +190,7 @@ private struct WelcomePage: View {
         VStack(spacing: 16) {
             Spacer()
 
-            Image(nsImage: AppMetadata.appIcon)
+            Image(nsImage: AppMetadata.displayLogo)
                 .resizable()
                 .frame(width: 80, height: 80)
 

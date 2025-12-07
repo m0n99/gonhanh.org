@@ -7,9 +7,14 @@ import AppKit
 enum AppMetadata {
     static let name = "GoNhanh"
 
-    // App Icon - centralized access
+    // App Icon - edge-to-edge for system use (Dock, Settings)
     static var appIcon: NSImage {
         NSApp.applicationIconImage ?? NSImage()
+    }
+
+    // Display Logo - with padding for app views (Onboarding, About)
+    static var displayLogo: NSImage {
+        NSImage(named: "AppLogo") ?? appIcon
     }
     static let displayName = "GoNhanh - Gõ Nhanh"
     static let tagline = "Bộ gõ tiếng Việt hiệu suất cao"
