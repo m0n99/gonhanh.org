@@ -1,16 +1,13 @@
 import SwiftUI
 
-// MARK: - Onboarding View
-
 struct OnboardingView: View {
     @State private var step = 0
     @State private var hasPermission = false
     @State private var selectedMode: InputMode = .telex
 
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
-    private var isPostRestart: Bool { step >= 10 }
-    private var totalSteps: Int { isPostRestart ? 2 : 3 }
-    private var stepIndex: Int { isPostRestart ? step - 10 : step }
+    private var totalSteps: Int { step >= 10 ? 2 : 3 }
+    private var stepIndex: Int { step >= 10 ? step - 10 : step }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -27,28 +24,21 @@ struct OnboardingView: View {
         }
         .onReceive(timer) { _ in
             hasPermission = AXIsProcessTrusted()
-            // Auto advance to step 2 when permission granted
-            if step == 1 && hasPermission {
-                step = 2
-            }
+            if step == 1 && hasPermission { step = 2 }
         }
     }
-
-    // MARK: - Content
 
     @ViewBuilder
     private var content: some View {
         switch step {
-        case 0: WelcomeStep()
-        case 1: PermissionStep()
-        case 2: ReadyStep()
+        case 0:  WelcomeStep()
+        case 1:  PermissionStep()
+        case 2:  ReadyStep()
         case 10: SuccessStep()
         case 11: SetupStep(selectedMode: $selectedMode)
         default: EmptyView()
         }
     }
-
-    // MARK: - Footer
 
     private var footer: some View {
         HStack {
@@ -60,12 +50,8 @@ struct OnboardingView: View {
                 }
             }
             Spacer()
-            HStack(spacing: 12) {
-                if step == 1 {
-                    Button("Quay lại") { step = 0 }
-                }
-                primaryButton
-            }
+            if step == 1 { Button("Quay lại") { step = 0 } }
+            primaryButton
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
@@ -74,24 +60,16 @@ struct OnboardingView: View {
     @ViewBuilder
     private var primaryButton: some View {
         switch step {
-        case 0:
-            Button("Tiếp tục") { step = 1 }.buttonStyle(.borderedProminent)
-        case 1:
-            Button("Mở Cài đặt") { openAccessibilitySettings() }.buttonStyle(.borderedProminent)
-        case 2:
-            Button("Khởi động lại") { restart() }.buttonStyle(.borderedProminent)
-        case 10:
-            Button("Tiếp tục") { step = 11 }.buttonStyle(.borderedProminent)
-        case 11:
-            Button("Hoàn tất") { finish() }.buttonStyle(.borderedProminent)
-        default:
-            EmptyView()
+        case 0:  Button("Tiếp tục") { step = 1 }.buttonStyle(.borderedProminent)
+        case 1:  Button("Mở Cài đặt") { openSettings() }.buttonStyle(.borderedProminent)
+        case 2:  Button("Khởi động lại") { restart() }.buttonStyle(.borderedProminent)
+        case 10: Button("Tiếp tục") { step = 11 }.buttonStyle(.borderedProminent)
+        case 11: Button("Hoàn tất") { finish() }.buttonStyle(.borderedProminent)
+        default: EmptyView()
         }
     }
 
-    // MARK: - Actions
-
-    private func openAccessibilitySettings() {
+    private func openSettings() {
         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
     }
 
@@ -99,7 +77,6 @@ struct OnboardingView: View {
         UserDefaults.standard.set(selectedMode.rawValue, forKey: SettingsKey.method)
         UserDefaults.standard.set(true, forKey: SettingsKey.permissionGranted)
         UserDefaults.standard.set(false, forKey: SettingsKey.hasCompletedOnboarding)
-
         let task = Process()
         task.launchPath = "/bin/sh"
         task.arguments = ["-c", "sleep 0.5 && open \"\(Bundle.main.bundlePath)\""]
@@ -119,77 +96,47 @@ struct OnboardingView: View {
 
 private struct WelcomeStep: View {
     var body: some View {
-        VStack(spacing: 16) {
-            Spacer()
-            Image(nsImage: AppMetadata.logo)
-                .resizable()
-                .frame(width: 80, height: 80)
-            Text("Chào mừng đến với \(AppMetadata.name)")
-                .font(.system(size: 22, weight: .bold))
-            Text(AppMetadata.tagline)
-                .foregroundStyle(.secondary)
-            Spacer()
+        StepLayout {
+            Image(nsImage: AppMetadata.logo).resizable().frame(width: 80, height: 80)
+            Text("Chào mừng đến với \(AppMetadata.name)").font(.system(size: 22, weight: .bold))
+            Text(AppMetadata.tagline).foregroundStyle(.secondary)
         }
-        .padding(.horizontal, 40)
     }
 }
 
 private struct PermissionStep: View {
     var body: some View {
-        VStack(spacing: 16) {
-            Spacer()
-            Image(systemName: "hand.raised.fill")
-                .font(.system(size: 40))
-                .foregroundStyle(.orange)
-            Text("Cấp quyền Accessibility")
-                .font(.system(size: 22, weight: .bold))
+        StepLayout {
+            Image(systemName: "hand.raised.fill").font(.system(size: 40)).foregroundStyle(.orange)
+            Text("Cấp quyền Accessibility").font(.system(size: 22, weight: .bold))
             Text("Bật \(AppMetadata.name) trong System Settings để gõ tiếng Việt.")
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary).multilineTextAlignment(.center)
             VStack(alignment: .leading, spacing: 8) {
                 Label("Mở Privacy & Security → Accessibility", systemImage: "1.circle.fill")
                 Label("Bật công tắc bên cạnh \(AppMetadata.name)", systemImage: "2.circle.fill")
             }
-            .font(.callout)
-            .foregroundStyle(.secondary)
-            .padding(.top, 8)
-            Spacer()
+            .font(.callout).foregroundStyle(.secondary).padding(.top, 8)
         }
-        .padding(.horizontal, 40)
     }
 }
 
 private struct ReadyStep: View {
     var body: some View {
-        VStack(spacing: 16) {
-            Spacer()
-            Image(systemName: "checkmark.shield.fill")
-                .font(.system(size: 40))
-                .foregroundStyle(.green)
-            Text("Đã cấp quyền")
-                .font(.system(size: 22, weight: .bold))
-            Text("Nhấn \"Khởi động lại\" để áp dụng.")
-                .foregroundStyle(.secondary)
-            Spacer()
+        StepLayout {
+            Image(systemName: "checkmark.shield.fill").font(.system(size: 40)).foregroundStyle(.green)
+            Text("Đã cấp quyền").font(.system(size: 22, weight: .bold))
+            Text("Nhấn \"Khởi động lại\" để áp dụng.").foregroundStyle(.secondary)
         }
-        .padding(.horizontal, 40)
     }
 }
 
 private struct SuccessStep: View {
     var body: some View {
-        VStack(spacing: 16) {
-            Spacer()
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 48))
-                .foregroundStyle(.green)
-            Text("Sẵn sàng hoạt động")
-                .font(.system(size: 22, weight: .bold))
-            Text("\(AppMetadata.name) đã được cấp quyền thành công.")
-                .foregroundStyle(.secondary)
-            Spacer()
+        StepLayout {
+            Image(systemName: "checkmark.circle.fill").font(.system(size: 48)).foregroundStyle(.green)
+            Text("Sẵn sàng hoạt động").font(.system(size: 22, weight: .bold))
+            Text("\(AppMetadata.name) đã được cấp quyền thành công.").foregroundStyle(.secondary)
         }
-        .padding(.horizontal, 40)
     }
 }
 
@@ -197,24 +144,29 @@ private struct SetupStep: View {
     @Binding var selectedMode: InputMode
 
     var body: some View {
-        VStack(spacing: 16) {
-            Spacer()
-            Image(systemName: "keyboard")
-                .font(.system(size: 40))
-                .foregroundStyle(.blue)
-            Text("Chọn kiểu gõ")
-                .font(.system(size: 22, weight: .bold))
-            Text("Có thể thay đổi sau trong menu.")
-                .foregroundStyle(.secondary)
+        StepLayout {
+            Image(systemName: "keyboard").font(.system(size: 40)).foregroundStyle(.blue)
+            Text("Chọn kiểu gõ").font(.system(size: 22, weight: .bold))
+            Text("Có thể thay đổi sau trong menu.").foregroundStyle(.secondary)
             VStack(spacing: 8) {
                 ForEach(InputMode.allCases, id: \.rawValue) { mode in
-                    ModeOption(mode: mode, isSelected: selectedMode == mode) {
-                        selectedMode = mode
-                    }
+                    ModeOption(mode: mode, isSelected: selectedMode == mode) { selectedMode = mode }
                 }
             }
-            .frame(maxWidth: 260)
-            .padding(.top, 8)
+            .frame(maxWidth: 260).padding(.top, 8)
+        }
+    }
+}
+
+// MARK: - Components
+
+private struct StepLayout<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Spacer()
+            content
             Spacer()
         }
         .padding(.horizontal, 40)
