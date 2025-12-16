@@ -444,6 +444,10 @@ private func keyboardCallback(
         return nil
     }
 
+    // Debug: log frontmost app for all keystrokes
+    if let app = NSWorkspace.shared.frontmostApplication {
+        Log.info("frontmost: \(app.bundleIdentifier ?? "nil")")
+    }
     Log.key(keyCode, "pass")
     return Unmanaged.passUnretained(event)
 }
@@ -451,23 +455,48 @@ private func keyboardCallback(
 // MARK: - Text Replacement
 
 private func detectMethod() -> (Method, (UInt32, UInt32, UInt32)) {
-    guard let app = NSWorkspace.shared.frontmostApplication,
-          let bundleId = app.bundleIdentifier else { return (.fast, (200, 800, 500)) }
-
-    // Selection method for autocomplete contexts
+    // Get focused element and its owning app (works for overlays like Spotlight)
     let systemWide = AXUIElementCreateSystemWide()
     var focused: CFTypeRef?
     var role: String?
+    var bundleId: String?
 
     if AXUIElementCopyAttributeValue(systemWide, kAXFocusedUIElementAttribute as CFString, &focused) == .success,
        let el = focused {
+        let axEl = el as! AXUIElement
+
+        // Get role
         var roleVal: CFTypeRef?
-        AXUIElementCopyAttributeValue(el as! AXUIElement, kAXRoleAttribute as CFString, &roleVal)
+        AXUIElementCopyAttributeValue(axEl, kAXRoleAttribute as CFString, &roleVal)
         role = roleVal as? String
+
+        // Get owning app's bundle ID (works for Spotlight overlay)
+        var pid: pid_t = 0
+        if AXUIElementGetPid(axEl, &pid) == .success {
+            if let app = NSRunningApplication(processIdentifier: pid) {
+                bundleId = app.bundleIdentifier
+            }
+        }
     }
 
-    if role == "AXComboBox" { Log.method("sel:combo"); return (.selection, (0, 0, 0)) }
+    // Fallback to frontmost app if we couldn't get bundle from focused element
+    if bundleId == nil {
+        bundleId = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+    }
 
+    guard let bundleId = bundleId else { return (.fast, (200, 800, 500)) }
+
+    // Debug: log bundle and role for investigation
+    Log.info("detect: \(bundleId) role=\(role ?? "nil")")
+
+    // Selection method for autocomplete UI elements (ComboBox, SearchField)
+    if role == "AXComboBox" { Log.method("sel:combo"); return (.selection, (0, 0, 0)) }
+    if role == "AXSearchField" { Log.method("sel:search"); return (.selection, (0, 0, 0)) }
+
+    // Spotlight - use slow backspace method (selection doesn't work in Spotlight)
+    if bundleId == "com.apple.Spotlight" { Log.method("slow:spotlight"); return (.slow, (8000, 20000, 8000)) }
+
+    // Browser address bars (AXTextField with autocomplete)
     let browsers = ["com.google.Chrome", "com.apple.Safari", "company.thebrowser.Browser"]
     if browsers.contains(bundleId) && role == "AXTextField" { Log.method("sel:browser"); return (.selection, (0, 0, 0)) }
     if role == "AXTextField" && bundleId.hasPrefix("com.jetbrains") { Log.method("sel:jb"); return (.selection, (0, 0, 0)) }
