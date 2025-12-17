@@ -88,13 +88,13 @@ class AppState: ObservableObject {
     // Dev apps that typically don't need Vietnamese input
     // enabledByDefault: false = app appears in list but toggle is OFF (user must enable manually)
     private static let defaultExcludedApps: [(bundleId: String, name: String, path: String, enabledByDefault: Bool)] = [
-        ("com.googlecode.iterm2", "iTerm", "/Applications/iTerm.app", true),
-        ("com.microsoft.VSCode", "Visual Studio Code", "/Applications/Visual Studio Code.app", true),
-        ("com.tinyapp.TablePlus", "TablePlus", "/Applications/TablePlus.app", true),
-        ("com.jetbrains.datagrip", "DataGrip", "/Applications/DataGrip.app", true),
-        ("com.apple.dt.Xcode", "Xcode", "/Applications/Xcode.app", true),
-        ("com.sequel-ace.sequel-ace", "Sequel Ace", "/Applications/Sequel Ace.app", true),
-        ("com.postmanlabs.mac", "Postman", "/Applications/Postman.app", true),
+        ("com.googlecode.iterm2", "iTerm", "/Applications/iTerm.app", false),
+        ("com.microsoft.VSCode", "Visual Studio Code", "/Applications/Visual Studio Code.app", false),
+        ("com.tinyapp.TablePlus", "TablePlus", "/Applications/TablePlus.app", false),
+        ("com.jetbrains.datagrip", "DataGrip", "/Applications/DataGrip.app", false),
+        ("com.apple.dt.Xcode", "Xcode", "/Applications/Xcode.app", false),
+        ("com.sequel-ace.sequel-ace", "Sequel Ace", "/Applications/Sequel Ace.app", false),
+        ("com.postmanlabs.mac", "Postman", "/Applications/Postman.app", false),
         ("com.apple.Terminal", "Terminal", "/System/Applications/Utilities/Terminal.app", false),
         ("com.termius-dmg.mac", "Termius", "/Applications/Termius.app", false),
     ]
@@ -103,23 +103,68 @@ class AppState: ObservableObject {
         isEnabled = UserDefaults.standard.object(forKey: SettingsKey.enabled) as? Bool ?? true
         currentMethod = InputMode(rawValue: UserDefaults.standard.integer(forKey: SettingsKey.method)) ?? .telex
         toggleShortcut = KeyboardShortcut.load()
-        excludedApps = Self.detectInstalledExcludedApps()
+        excludedApps = Self.loadExcludedApps()
         checkForUpdates()
         setupObservers()
     }
 
-    /// Only add apps to excluded list if they are actually installed
-    private static func detectInstalledExcludedApps() -> [ExcludedApp] {
+    /// Load excluded apps: detect installed apps and apply persisted user preferences
+    private static func loadExcludedApps() -> [ExcludedApp] {
         let fileManager = FileManager.default
-        return defaultExcludedApps.compactMap { app in
+        let savedPrefs = UserDefaults.standard.dictionary(forKey: SettingsKey.excludedApps) as? [String: Bool] ?? [:]
+        let defaultBundleIds = Set(defaultExcludedApps.map { $0.bundleId })
+
+        // Load default apps (only if installed)
+        var apps = defaultExcludedApps.compactMap { app -> ExcludedApp? in
             guard fileManager.fileExists(atPath: app.path) else { return nil }
+            let isEnabled = savedPrefs[app.bundleId] ?? app.enabledByDefault
             return ExcludedApp(
                 bundleId: app.bundleId,
                 name: app.name,
                 icon: NSWorkspace.shared.icon(forFile: app.path),
-                isEnabled: app.enabledByDefault
+                isEnabled: isEnabled
             )
         }
+
+        // Load user-added custom apps
+        if let customApps = UserDefaults.standard.array(forKey: SettingsKey.customExcludedApps) as? [[String: Any]] {
+            for appData in customApps {
+                guard let bundleId = appData["bundleId"] as? String,
+                      let name = appData["name"] as? String,
+                      let path = appData["path"] as? String,
+                      !defaultBundleIds.contains(bundleId),
+                      fileManager.fileExists(atPath: path) else { continue }
+                let isEnabled = savedPrefs[bundleId] ?? true
+                apps.append(ExcludedApp(
+                    bundleId: bundleId,
+                    name: name,
+                    icon: NSWorkspace.shared.icon(forFile: path),
+                    isEnabled: isEnabled
+                ))
+            }
+        }
+
+        return apps
+    }
+
+    /// Save excluded apps preferences to UserDefaults
+    private func saveExcludedAppsPreferences() {
+        let defaultBundleIds = Set(Self.defaultExcludedApps.map { $0.bundleId })
+
+        // Save isEnabled preferences for all apps
+        let prefs = excludedApps.reduce(into: [String: Bool]()) { dict, app in
+            dict[app.bundleId] = app.isEnabled
+        }
+        UserDefaults.standard.set(prefs, forKey: SettingsKey.excludedApps)
+
+        // Save custom apps (not in default list) with their paths
+        let customApps: [[String: Any]] = excludedApps.compactMap { app in
+            guard !defaultBundleIds.contains(app.bundleId) else { return nil }
+            // Find path from workspace
+            let path = NSWorkspace.shared.urlForApplication(withBundleIdentifier: app.bundleId)?.path ?? ""
+            return ["bundleId": app.bundleId, "name": app.name, "path": path]
+        }
+        UserDefaults.standard.set(customApps, forKey: SettingsKey.customExcludedApps)
     }
 
     private func setupObservers() {
@@ -145,10 +190,11 @@ class AppState: ObservableObject {
         RustBridge.syncShortcuts(data)
     }
 
-    /// Sync excluded apps to manager
+    /// Sync excluded apps to manager and persist preferences
     func syncExcludedAppsToEngine() {
         let bundleIds = excludedApps.filter { $0.isEnabled }.map { $0.bundleId }
         ExcludedAppsManager.shared.setExcludedApps(bundleIds)
+        saveExcludedAppsPreferences()
     }
 
     func checkForUpdates() {
