@@ -542,6 +542,8 @@ struct SettingsPageView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
+            Spacer()
+
             // Launch at Login warning
             if !appState.isLaunchAtLoginEnabled {
                 LaunchAtLoginBanner { appState.enableLaunchAtLogin() }
@@ -552,6 +554,12 @@ struct SettingsPageView: View {
                 SettingsToggleRow("Bộ gõ tiếng Việt", isOn: $appState.isEnabled)
                 Divider().padding(.leading, 12)
                 inputMethodRow
+                if appState.currentMethod == .telex {
+                    Divider().padding(.leading, 12)
+                    SettingsToggleRow("Tự chuyển W → Ư ở đầu từ",
+                                      subtitle: "Gõ 'w' đầu từ sẽ thành 'ư'",
+                                      isOn: $appState.autoWShortcut)
+                }
             }
             .cardBackground()
 
@@ -568,13 +576,6 @@ struct SettingsPageView: View {
                 SettingsToggleRow("Chuyển chế độ thông minh",
                                   subtitle: "Tự động nhớ trạng thái Anh/Việt cho từng ứng dụng",
                                   isOn: $appState.isSmartModeEnabled)
-
-                if appState.currentMethod == .telex {
-                    Divider().padding(.leading, 12)
-                    SettingsToggleRow("Tự chuyển W → Ư ở đầu từ",
-                                      subtitle: "Gõ 'w' đầu từ sẽ thành 'ư'",
-                                      isOn: $appState.autoWShortcut)
-                }
             }
             .cardBackground()
 
