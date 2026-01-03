@@ -8,14 +8,27 @@ import AppKit
 class SoundManager {
     static let shared = SoundManager()
 
-    private init() {}
+    // Cache sound instances to prevent issues with rapid toggling
+    // Issue #168: sounds not playing when toggling rapidly
+    private let enableSound: NSSound?
+    private let disableSound: NSSound?
+    private var currentSound: NSSound?
+
+    private init() {
+        enableSound = NSSound(named: NSSound.Name("Tink"))
+        disableSound = NSSound(named: NSSound.Name("Pop"))
+    }
 
     func playToggleSound(enabled: Bool) {
         guard AppState.shared.soundEnabled else { return }
-        // Use different system sounds for on/off states
-        // "Tink" for enabling Vietnamese, "Pop" for disabling
-        let soundName = enabled ? "Tink" : "Pop"
-        NSSound(named: NSSound.Name(soundName))?.play()
+
+        // Stop any currently playing sound to handle rapid toggling
+        currentSound?.stop()
+
+        // Use cached sound instances
+        let sound = enabled ? enableSound : disableSound
+        currentSound = sound
+        sound?.play()
     }
 }
 
