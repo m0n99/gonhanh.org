@@ -736,6 +736,8 @@ private var shortcutObserver: NSObjectProtocol?
 /// Skip word restore after mouse click (user may be selecting/deleting text)
 /// Reset to false after first keystroke
 private var skipWordRestoreAfterClick = false
+/// Track Control key state to detect keydown for buffer clearing (Issue #150)
+private var wasControlPressed = false
 
 // MARK: - Word Restore Support
 
@@ -949,6 +951,15 @@ private func keyboardCallback(
 
     // Handle modifier-only shortcuts (Ctrl+Shift, Cmd+Option, etc.)
     if type == .flagsChanged {
+        // Issue #150: Control key press clears buffer (rhythm break like EVKey)
+        let isControlNowPressed = flags.contains(.maskControl)
+        if isControlNowPressed && !wasControlPressed {
+            // Control just pressed - clear buffer to break rhythm
+            RustBridge.clearBuffer()
+            TextInjector.shared.clearSessionBuffer()
+        }
+        wasControlPressed = isControlNowPressed
+
         if matchesModifierOnlyShortcut(flags: flags) {
             wasModifierShortcutPressed = true
         } else if wasModifierShortcutPressed {
