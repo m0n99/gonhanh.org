@@ -940,17 +940,22 @@ private func matchesModifierOnlyShortcut(flags: CGEventFlags) -> Bool {
 }
 
 /// Trigger restore shortcut - restore raw ASCII and clear buffer
-private func triggerRestoreShortcut(flags: CGEventFlags, proxy: CGEventTapProxy) {
+/// Returns true if restore produced output.
+private func triggerRestoreShortcut(flags: CGEventFlags, proxy: CGEventTapProxy) -> Bool {
     let shift = flags.contains(.maskShift)
     let caps = shift || flags.contains(.maskAlphaShift)
-    let ctrl = flags.contains(.maskCommand) || flags.contains(.maskControl) || flags.contains(.maskAlternate)
     let (method, delays) = detectMethod()
-    if let (bs, chars, _) = RustBridge.processKey(keyCode: UInt16(KeyCode.esc), caps: caps, ctrl: ctrl, shift: shift) {
-        Log.info("Restore shortcut: backspace \(bs), chars '\(String(chars))'")
-        sendReplacement(backspace: bs, chars: chars, method: method, delays: delays, proxy: proxy)
+    // Force ctrl=false so Cmd-based shortcuts still restore.
+    if let (bs, chars, _) = RustBridge.processKey(keyCode: UInt16(KeyCode.esc), caps: caps, ctrl: false, shift: shift) {
+        if bs > 0 || !chars.isEmpty {
+            Log.info("Restore shortcut: backspace \(bs), chars '\(String(chars))'")
+            sendReplacement(backspace: bs, chars: chars, method: method, delays: delays, proxy: proxy)
+            TextInjector.shared.clearSessionBuffer()
+            RustBridge.clearBuffer()
+            return true
+        }
     }
-    TextInjector.shared.clearSessionBuffer()
-    RustBridge.clearBuffer()
+    return false
 }
 
 private func keyboardCallback(
@@ -980,7 +985,12 @@ private func keyboardCallback(
         // For restore shortcut recording: allow any single key (including ESC) or any modifier
         if isRecordingRestoreShortcut {
             if type == .keyDown {
-                // Any key press (with or without modifiers)
+                // Any key press (with or without modifiers), but reject Ctrl-based shortcuts.
+                if mods.contains(.maskControl) {
+                    stopShortcutRecording()
+                    DispatchQueue.main.async { NotificationCenter.default.post(name: .shortcutRecordingCancelled, object: nil) }
+                    return nil
+                }
                 let captured = KeyboardShortcut(keyCode: keyCode, modifiers: mods.rawValue)
                 stopShortcutRecording()
                 DispatchQueue.main.async { NotificationCenter.default.post(name: .shortcutRecorded, object: captured) }
@@ -989,9 +999,14 @@ private func keyboardCallback(
             if type == .flagsChanged {
                 // Any modifier(s) released - save if we had modifiers
                 if mods.isEmpty && !peakRecordingModifiers.isEmpty {
-                    let captured = KeyboardShortcut(keyCode: 0xFFFF, modifiers: peakRecordingModifiers.rawValue)
-                    stopShortcutRecording()
-                    DispatchQueue.main.async { NotificationCenter.default.post(name: .shortcutRecorded, object: captured) }
+                    if peakRecordingModifiers.contains(.maskControl) {
+                        stopShortcutRecording()
+                        DispatchQueue.main.async { NotificationCenter.default.post(name: .shortcutRecordingCancelled, object: nil) }
+                    } else {
+                        let captured = KeyboardShortcut(keyCode: 0xFFFF, modifiers: peakRecordingModifiers.rawValue)
+                        stopShortcutRecording()
+                        DispatchQueue.main.async { NotificationCenter.default.post(name: .shortcutRecorded, object: captured) }
+                    }
                 } else {
                     recordingModifiers = mods
                     if mods.modifierCount > peakRecordingModifiers.modifierCount {
@@ -1057,7 +1072,7 @@ private func keyboardCallback(
                 wasRestoreModifierPressed = true
             } else if wasRestoreModifierPressed {
                 wasRestoreModifierPressed = false
-                triggerRestoreShortcut(flags: flags, proxy: proxy)
+                _ = triggerRestoreShortcut(flags: flags, proxy: proxy)
             }
         }
 
@@ -1116,9 +1131,12 @@ private func keyboardCallback(
         return Unmanaged.passUnretained(event)
     }
     // Issue #149: Restore shortcut - restore raw ASCII if enabled
-    if AppState.shared.restoreShortcutEnabled && matchesRestoreShortcut(keyCode: keyCode, flags: flags) {
-        triggerRestoreShortcut(flags: flags, proxy: proxy)
-        return nil  // Consume the event so it doesn't propagate
+    if AppState.shared.restoreShortcutEnabled && !currentRestoreShortcut.isModifierOnly
+        && matchesRestoreShortcut(keyCode: keyCode, flags: flags) {
+        let didRestore = triggerRestoreShortcut(flags: flags, proxy: proxy)
+        if didRestore {
+            return nil
+        }
     }
 
     // Detect injection method once per keystroke (expensive AX query)
