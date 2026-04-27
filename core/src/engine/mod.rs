@@ -574,12 +574,16 @@ impl Engine {
             return self.on_key_ext(key, caps, ctrl, shift);
         };
 
-        // Ctrl/Cmd bypasses everything
+        // Issue #363: When ctrl=true but ch is provided (Option+key on macOS),
+        // skip Vietnamese transforms but still accumulate for shortcut matching.
+        // Platform passes ctrl=true to bypass Telex/VNI, but shortcuts like √√→✅
+        // need the character to be accumulated in shortcut_prefix.
         if ctrl {
-            self.clear();
+            self.buf.clear();
+            self.raw_input.clear();
             self.word_history.clear();
             self.spaces_after_commit = 0;
-            return Result::none();
+            // Fall through to shortcut accumulation below
         }
 
         // Layout-aware character path
@@ -4881,6 +4885,16 @@ impl Engine {
             }
         }
 
+        // Issue #367: Keep buffer when circumflex was reverted and no marks remain.
+        // When user types "totoo" (t-o-t-o-o), circumflex fires on 4th 'o' (tôt),
+        // then 5th 'o' reverts it → buffer="toto" (clean, no marks). The user explicitly
+        // typed double vowel to revert, so keep buffer content.
+        // Without this, auto-restore would output raw "totoo" (extra vowel from revert).
+        // Applies to: TOTO, MAMA, TETE, SATA, PAPA, etc.
+        if self.had_circumflex_revert && !has_marks_or_tones && !has_stroke {
+            return None;
+        }
+
         // UNIFIED LOGIC: Restore ONLY when BOTH conditions are met:
         // 1. buffer != valid Vietnamese (is_buffer_invalid_vietnamese)
         // 2. raw_input == valid English (is_raw_input_valid_english)
@@ -5736,6 +5750,10 @@ impl Engine {
                 } else {
                     self.telex_double_raw_len
                 };
+                // Clamp to raw_input length to avoid out-of-bounds slice when
+                // raw_input has been shortened further (e.g. backspace) after
+                // telex_double_raw was stored.
+                let subsequent_start = subsequent_start.min(self.raw_input.len());
                 for &(key, caps, shift) in &self.raw_input[subsequent_start..] {
                     if let Some(ch) = utils::key_to_char_ext(key, caps, shift) {
                         result.push(ch);
